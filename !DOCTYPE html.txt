@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>VHTR Source Term Estimator v4.0</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root{
+  --c0:#f5f6f8;--c1:#ffffff;--c2:#f0f2f5;--c3:#e8ebef;--c4:#dde1e7;
+  --text:#1a1d23;--text2:#4a5568;--text3:#8a96a3;
+  --border:#dde1e7;--border2:#c8cfd8;
+  --green:#1a7f4b;--green-bg:#edf7f1;--green-mid:#2da05f;
+  --blue:#1a56a0;--blue-bg:#eef4fd;--blue-mid:#2563b0;
+  --amber:#92610a;--amber-bg:#fef9ec;--amber-mid:#b07a12;
+  --red:#b91c1c;--red-bg:#fef2f2;--red-mid:#d42020;
+  --purple:#6b21a8;--purple-bg:#f5f0fd;--purple-mid:#7c3aed;
+  --orange:#9a3412;--orange-bg:#fff7ed;--orange-mid:#c2410c;
+  --accent:#1a7f4b;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+  --r4:4px;--r6:6px;--r8:8px;--r12:12px;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px;scroll-behavior:smooth}
+body{font-family:var(--sans);background:var(--c0);color:var(--text);line-height:1.6;min-height:100vh}
+
+/* ── Shell ── */
+.shell{display:grid;grid-template-columns:242px 1fr;min-height:100vh}
+.sidebar{background:var(--c1);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;z-index:10;box-shadow:var(--shadow)}
+.main-area{overflow:auto;background:var(--c0)}
+.page{display:none;padding:1.75rem 2rem;max-width:1080px}
+.page.active{display:block}
+
+/* ── Sidebar ── */
+.sb-top{padding:1.25rem 1.25rem 1rem;border-bottom:1px solid var(--border)}
+.sb-brand{font-size:13px;font-weight:600;color:var(--green);letter-spacing:.04em}
+.sb-sub{font-size:10px;color:var(--text3);margin-top:2px;font-family:var(--mono)}
+.sb-section{padding:.5rem .75rem .25rem}
+.sb-cat{font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;padding:0 .5rem;margin-bottom:2px}
+.sb-btn{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;border:none;border-radius:var(--r6);background:none;color:var(--text2);font-size:12.5px;font-family:var(--sans);cursor:pointer;text-align:left;transition:all .12s}
+.sb-btn:hover{background:var(--c2);color:var(--text)}
+.sb-btn.active{background:var(--green-bg);color:var(--green);font-weight:500}
+.sb-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0;opacity:.75}
+.sb-footer{margin-top:auto;padding:.85rem 1.25rem;border-top:1px solid var(--border);font-size:10px;color:var(--text3);line-height:1.6}
+
+/* ── Page header ── */
+.ph{margin-bottom:1.5rem}
+.ph-title{font-size:19px;font-weight:500;color:var(--text)}
+.ph-desc{font-size:12.5px;color:var(--text2);margin-top:5px;line-height:1.6}
+.ph-divider{border:none;border-top:1px solid var(--border);margin-top:1rem}
+
+/* ── Cards ── */
+.card{background:var(--c1);border:1px solid var(--border);border-radius:var(--r12);padding:1.1rem 1.25rem;margin-bottom:1rem;box-shadow:var(--shadow)}
+.card-hd{font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:.75rem;display:flex;align-items:center;gap:6px}
+.card-hd::before{content:'';width:3px;height:11px;background:var(--green);border-radius:2px;flex-shrink:0}
+
+/* ── Metric grid ── */
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:8px;margin-bottom:1rem}
+.metric{background:var(--c1);border:1px solid var(--border);border-radius:var(--r8);padding:.8rem 1rem;box-shadow:var(--shadow)}
+.metric-lbl{font-size:10px;color:var(--text3);font-family:var(--mono);margin-bottom:4px}
+.metric-val{font-size:17px;font-weight:500;font-family:var(--mono);color:var(--text)}
+.metric-val sup{font-size:11px}
+.metric-sub{font-size:10px;color:var(--text3);margin-top:2px}
+.mv-green .metric-val{color:var(--green)}
+.mv-amber .metric-val{color:var(--amber)}
+.mv-red   .metric-val{color:var(--red)}
+.mv-blue  .metric-val{color:var(--blue)}
+
+/* ── Source tags ── */
+.src{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:1px 6px;border-radius:3px;font-family:var(--mono);font-weight:500;text-decoration:none;transition:opacity .15s;white-space:nowrap;border:1px solid transparent}
+.src:hover{opacity:.75;text-decoration:underline}
+.src-agr  {background:var(--green-bg);color:var(--green); border-color:#b6dfc6}
+.src-iaea {background:var(--purple-bg);color:var(--purple);border-color:#d8c5f7}
+.src-htgr {background:var(--blue-bg);  color:var(--blue);  border-color:#bdd4f5}
+.src-mst  {background:var(--orange-bg);color:var(--orange);border-color:#fddcb8}
+.src-cons {background:var(--amber-bg); color:var(--amber); border-color:#f5dfa0}
+
+/* ── Alerts ── */
+.alert{border-radius:var(--r8);padding:9px 13px;font-size:12px;margin-bottom:1rem;display:flex;gap:8px;line-height:1.5}
+.a-info  {background:var(--blue-bg);  color:var(--blue); border:1px solid #bdd4f5}
+.a-warn  {background:var(--amber-bg); color:var(--amber);border:1px solid #f5dfa0}
+.a-danger{background:var(--red-bg);   color:var(--red);  border:1px solid #fbc8c8}
+.a-green {background:var(--green-bg); color:var(--green);border:1px solid #b6dfc6}
+
+/* ── Controls ── */
+.field{margin-bottom:.9rem}
+.field-hd{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--text2);margin-bottom:4px}
+.field-hd .fv{font-family:var(--mono);font-size:12px;color:var(--green);font-weight:500}
+.field-note{font-size:10.5px;color:var(--text3);margin-top:3px;line-height:1.4}
+input[type=range]{width:100%;accent-color:var(--green);cursor:pointer;margin:2px 0}
+select{font-size:12px;padding:6px 9px;border:1px solid var(--border2);border-radius:var(--r6);background:var(--c1);color:var(--text);width:100%;cursor:pointer;font-family:var(--sans)}
+select:focus{outline:none;border-color:var(--green)}
+
+/* ── Tables ── */
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{font-size:10px;font-weight:600;color:var(--text3);text-align:left;padding:6px 10px;border-bottom:1px solid var(--border);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;background:var(--c2)}
+.tbl td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:top;line-height:1.4}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:var(--c2)}
+.tbl-mono{font-family:var(--mono);font-size:11px;color:var(--text)}
+
+/* ── Badge ── */
+.badge{display:inline-flex;align-items:center;font-size:10px;padding:2px 7px;border-radius:3px;font-weight:600;font-family:var(--mono)}
+.b-green {background:var(--green-bg);color:var(--green)}
+.b-blue  {background:var(--blue-bg); color:var(--blue)}
+.b-amber {background:var(--amber-bg);color:var(--amber)}
+.b-red   {background:var(--red-bg);  color:var(--red)}
+.b-gray  {background:var(--c3);      color:var(--text3)}
+
+/* ── Bar ── */
+.bar-track{background:var(--c3);border-radius:2px;height:5px;overflow:hidden;min-width:50px;margin-top:4px}
+.bar-fill{height:5px;border-radius:2px;transition:width .45s ease}
+
+/* ── Grid ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem}
+
+/* ── Scenario cards ── */
+.sc-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:1rem}
+.sc-card{border:1px solid var(--border);border-radius:var(--r8);padding:.8rem 1rem;cursor:pointer;transition:all .12s;background:var(--c1);box-shadow:var(--shadow)}
+.sc-card:hover{border-color:var(--border2);background:var(--c2)}
+.sc-card.sel{border:2px solid var(--green);background:var(--green-bg)}
+.sc-card h4{font-size:12.5px;font-weight:500;color:var(--text);margin-bottom:2px}
+.sc-card.sel h4{color:var(--green)}
+.sc-card p{font-size:11px;color:var(--text3);line-height:1.4}
+
+/* ── Reference list ── */
+.ref-item{display:flex;gap:8px;padding:10px;border:1px solid var(--border);border-radius:var(--r8);margin-bottom:6px;background:var(--c1);box-shadow:var(--shadow)}
+.ref-item:hover{border-color:var(--border2)}
+.ref-num{font-family:var(--mono);font-size:11px;color:var(--text3);flex-shrink:0;width:24px;padding-top:1px}
+.ref-body{flex:1;font-size:11.5px;color:var(--text2);line-height:1.5}
+.ref-title{color:var(--text);font-style:italic}
+.ref-links{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+.ref-link{font-size:10px;padding:2px 7px;border-radius:3px;font-family:var(--mono);font-weight:500;text-decoration:none;display:inline-flex;align-items:center;gap:3px;transition:opacity .15s}
+.ref-link:hover{opacity:.7;text-decoration:underline}
+.rl-osti{background:var(--blue-bg); color:var(--blue)}
+.rl-nrc {background:var(--green-bg);color:var(--green)}
+.rl-iaea{background:var(--purple-bg);color:var(--purple)}
+.rl-doi {background:var(--amber-bg);color:var(--amber)}
+.rl-doe {background:var(--c3);      color:var(--text2)}
+.rl-lock{background:var(--c3);      color:var(--text3)}
+.ref-access{font-size:10px;color:var(--text3);margin-top:2px}
+
+/* ── Footnote ── */
+.fn{font-size:10.5px;color:var(--text3);line-height:1.5;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+
+/* ── Highlight ── */
+.hl-green{color:var(--green);font-weight:500}
+.hl-red  {color:var(--red);  font-weight:500}
+.hl-amber{color:var(--amber);font-weight:500}
+
+/* ── Chart ── */
+.chart-wrap{position:relative;width:100%}
+
+/* ── Pathway ── */
+.pathway{display:flex;align-items:center;overflow-x:auto;gap:0;padding:.5rem 0}
+.pw-node{text-align:center;flex-shrink:0}
+.pw-box{border:1px solid var(--border2);border-radius:var(--r6);padding:7px 9px;background:var(--c2);font-size:11px;min-width:84px}
+.pw-box-key{border-color:var(--amber-mid);background:var(--amber-bg)}
+.pw-box-end{border-color:var(--red-mid);  background:var(--red-bg)}
+.pw-box-mit{border-color:var(--green-mid);background:var(--green-bg)}
+.pw-lbl{font-size:9px;color:var(--text3);margin-top:2px;font-family:var(--mono)}
+.pw-arrow{color:var(--text3);font-size:14px;padding:0 3px;flex-shrink:0}
+
+hr.divider{border:none;border-top:1px solid var(--border);margin:.85rem 0}
+
+@media(max-width:720px){.shell{grid-template-columns:1fr}.sidebar{height:auto;position:static}}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- ══ SIDEBAR ══ -->
+<nav class="sidebar">
+  <div class="sb-top">
+    <div class="sb-brand">VHTR Source Term Estimator</div>
+    <div class="sb-sub">v4.0 · AGR + MST + IAEA · PBMR-400</div>
+  </div>
+  <div class="sb-section">
+    <div class="sb-cat">Calculators</div>
+    <button class="sb-btn active" onclick="nav('normal')"     id="n-normal">    <span class="sb-dot"></span>Normal Operation</button>
+    <button class="sb-btn"        onclick="nav('accident')"   id="n-accident">  <span class="sb-dot"></span>Accident Scenarios</button>
+    <button class="sb-btn"        onclick="nav('comparison')" id="n-comparison"><span class="sb-dot"></span>Scenario Comparison</button>
+    <button class="sb-btn"        onclick="nav('filter')"     id="n-filter">    <span class="sb-dot"></span>Filter &amp; Barrier System</button>
+  </div>
+  <div class="sb-section">
+    <div class="sb-cat">Data Basis</div>
+    <button class="sb-btn" onclick="nav('agr')"      id="n-agr">     <span class="sb-dot"></span>AGR Experimental Database</button>
+    <button class="sb-btn" onclick="nav('diffdata')" id="n-diffdata"><span class="sb-dot"></span>IAEA Diffusivity Data</button>
+    <button class="sb-btn" onclick="nav('mst')"      id="n-mst">     <span class="sb-dot"></span>MST Methodology</button>
+  </div>
+  <div class="sb-section">
+    <div class="sb-cat">References</div>
+    <button class="sb-btn" onclick="nav('refs')"  id="n-refs"> <span class="sb-dot"></span>Reference Index</button>
+    <button class="sb-btn" onclick="nav('trace')" id="n-trace"><span class="sb-dot"></span>Value Traceability</button>
+  </div>
+  <div class="sb-footer">
+    Sources: AGR INL/RPT-23-74651<br>
+    MST INL/EXT-10-17997<br>
+    IAEA TECDOC-978<br>
+    SAND2024-07779 · EPRI-AR-1(NP)<br>
+    ── Research reference only ──<br>
+    Not for licensing applications
+  </div>
+</nav>
+
+<!-- ══ MAIN ══ -->
+<main class="main-area">
+
+<!-- ─── Normal Operation ─── -->
+<div class="page active" id="page-normal">
+  <div class="ph">
+    <div class="ph-title">Normal Operation — TRISO Pebble Source Term</div>
+    <div class="ph-desc">
+      Matrix/coolant (M/C) fractions from <a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">AGR INL/RPT-23-74651 Table 9</a> measured data fit (intact compacts, no failures).
+      Accident release fractions from <a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">AGR Table 14/15</a> safety tests.
+      Kr/Xe uses <a class="src src-iaea" href="https://www.iaea.org/publications/5456/fuel-performance-and-fission-product-behaviour-in-gas-cooled-reactors" target="_blank">IAEA TECDOC-978</a> SiC diffusivities.
+      Failure fractions from <a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">AGR Table 16 (95% CL binomial)</a>.
+    </div>
+    <hr class="ph-divider">
+  </div>
+
+  <div class="alert a-info">
+    <span>ℹ</span>
+    <div>Normal-operation M/C fractions = AGR Arrhenius fit to measured Table 9 data (intact compacts).
+      Parameters: <span class="hl-green">Ag-110m: A = 3.02×10⁷, B = −2.887</span>;
+      <span class="hl-green">Cs-134: A = 1.78×10³, B = −2.661</span>
+      (model: M/C = A·exp(B·10000/T<sub>K</sub>)).
+      Kr/Xe and I use IAEA TECDOC-978 SiC diffusivities + spherical diffusion equation.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">Reactor operating parameters</div>
+    <div class="g2" style="gap:1.5rem">
+      <div>
+        <div class="field">
+          <div class="field-hd">Thermal power (MW<sub>th</sub>)<span class="fv" id="v-pwr">400</span></div>
+          <input type="range" min="100" max="600" step="10" value="400" id="s-pwr" oninput="calcNorm()">
+          <div class="field-note">PBMR-400 design: 400 MW<sub>th</sub>, 175 MW<sub>e</sub>. <a class="src src-htgr" href="https://www.nrc.gov/docs/ML0609/ML060940293.pdf" target="_blank">PBMR-400 Doc 016956 Table 3-1</a></div>
+        </div>
+        <div class="field">
+          <div class="field-hd">Peak fuel temperature (°C)<span class="fv" id="v-T">1100</span></div>
+          <input type="range" min="800" max="1300" step="10" value="1100" id="s-T" oninput="calcNorm()">
+          <div class="field-note">PBMR-400 normal limit: 1130°C. AGR-1 avg TAVA ~1044°C. <a class="src src-htgr" href="https://www.nrc.gov/docs/ML0609/ML060940293.pdf" target="_blank">PBMR Table 3-1</a> / <a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">AGR Table 16</a></div>
+        </div>
+        <div class="field">
+          <div class="field-hd">Core residence time (days)<span class="fv" id="v-td">928</span></div>
+          <input type="range" min="100" max="1500" step="1" value="928" id="s-td" oninput="calcNorm()">
+          <div class="field-note">PBMR-400: ~6 passes, 927.9 days total. <a class="src src-htgr" href="https://www.nrc.gov/docs/ML0609/ML060940293.pdf" target="_blank">PBMR-400 Table 3-1</a></div>
+        </div>
+      </div>
+      <div>
+        <div class="field">
+          <div class="field-hd">Burnup (%FIMA)<span class="fv" id="v-bu">9.5</span></div>
+          <input type="range" min="5" max="20" step="0.1" value="9.5" id="s-bu" oninput="calcNorm()">
+          <div class="field-note">PBMR-400: 92,000 MWd/t ≈ 9.5–10%FIMA (9.6% enriched UO₂). AGR-1 avg 16.4%FIMA, AGR-2 avg 10.9%FIMA. <a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">AGR Tables 2/3</a></div>
+        </div>
+        <div class="field">
+          <div class="field-hd">SiC defect fraction (×10⁻⁵)<span class="fv" id="v-fd">4.1</span></div>
+          <input type="range" min="1" max="30" step="0.1" value="4.1" id="s-fd" oninput="calcNorm()">
+          <div class="field-note">AGR-1 + AGR-2 combined (412,336 particles): SiC 95% CL = <b>4.11×10⁻⁵</b>. <a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">AGR Table 16 combined irradiation</a></div>
+        </div>
+        <div class="field">
+          <div class="field-hd">TRISO particles / pebble<span class="fv" id="v-np">15,000</span></div>
+          <input type="range" min="8000" max="20000" step="100" value="15000" id="s-np" oninput="calcNorm()">
+          <div class="field-note">PBMR-400 design: ~15,000 TRISO/pebble. <a class="src src-cons">Conservative design estimate</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mgrid" id="norm-kpi"></div>
+
+  <div class="card">
+    <div class="card-hd">Normal-operation M/C fractions by nuclide (particle → coolant)</div>
+    <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr>
+          <th style="width:16%">Nuclide</th>
+          <th style="width:14%">M/C fraction</th>
+          <th style="width:9%">Level</th>
+          <th style="width:14%">Relative scale</th>
+          <th style="width:47%">Method · Data source</th>
+        </tr></thead>
+        <tbody id="norm-tbody"></tbody>
+      </table>
+    </div>
+    <div class="fn">
+      † M/C fraction = inventory in matrix + coolant relative to total compact inventory at EOI+1d.<br>
+      <b>Ag-110m, Cs-134</b>: Arrhenius fit to AGR Table 9 measured M/C values (intact compacts, no failures): M/C = A·exp(B·10000/T<sub>K</sub>).
+      <b>Eu-154, Sr-90</b>: AGR Section 4.2 in-pile release rate fit R = A·exp(B·10000/T<sub>K</sub>) [fraction/h/%FIMA] × time × burnup.
+      <b>Kr/Xe</b>: IAEA TECDOC-978 SiC diffusivity + spherical release η = 1−(6/π²)exp(−π²Dt/r²), r<sub>SiC</sub> = 35 µm; defect-particle gap contribution (MST WP §4).
+      <b>I</b>: same diffusivity as Kr per IAEA TECDOC-978 recommendation.<br>
+      Sources: <a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">AGR INL/RPT-23-74651</a> ·
+      <a class="src src-iaea" href="https://www.iaea.org/publications/5456/fuel-performance-and-fission-product-behaviour-in-gas-cooled-reactors" target="_blank">IAEA TECDOC-978</a> ·
+      <a class="src src-mst" href="https://www.osti.gov/biblio/993002" target="_blank">MST INL/EXT-10-17997</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">M/C fraction comparison (log scale)</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px" id="norm-legend"></div>
+    <div class="chart-wrap" style="height:240px">
+      <canvas id="normChart" role="img" aria-label="Bar chart of normal-operation M/C fractions for each nuclide on a log scale">Normal-operation fission product matrix/coolant fractions</canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Accident Scenarios ─── -->
+<div class="page" id="page-accident">
+  <div class="ph">
+    <div class="ph-title">Accident Scenarios — Fission Product Release Fractions</div>
+    <div class="ph-desc">
+      Accident release fractions anchored to <a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">AGR safety test geometric means (Tables 14/15)</a>, interpolated via Arrhenius rate fits.
+      SiC failure fractions from <a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">AGR Table 16 (95% CL, binomial statistics)</a>.
+      Gap inventory release from failed particles per <a class="src src-mst" href="https://www.osti.gov/biblio/993002" target="_blank">MST White Paper §4</a>.
+    </div>
+    <hr class="ph-divider">
+  </div>
+
+  <div class="card">
+    <div class="card-hd">Select accident scenario</div>
+    <div class="sc-grid">
+      <div class="sc-card sel" onclick="selSc('dlofc')" id="sc-dlofc">
+        <h4>Depressurized LOFC (D-LOFC)</h4>
+        <p>Primary boundary breach + loss of forced circulation. Passive conduction/radiation cooling. Typical HTGR design-basis accident (DBA). MST WP §4.4</p>
+      </div>
+      <div class="sc-card" onclick="selSc('air')" id="sc-air">
+        <h4>Air ingress + graphite oxidation</h4>
+        <p>Air enters primary circuit; O₂ reacts with graphite producing CO/CO₂; chemical attack superimposed on thermal loading. SAND2024-07779 §2.1</p>
+      </div>
+      <div class="sc-card" onclick="selSc('sft_lop')" id="sc-sft_lop">
+        <h4>Spent fuel tank — loss of power</h4>
+        <p>Active cooling fans fail; passive natural convection. Spent fuel decay heat ~120 kW. SAND2024-07779 §4.1</p>
+      </div>
+      <div class="sc-card" onclick="selSc('sft_hx')" id="sc-sft_hx">
+        <h4>Spent fuel tank — HX failure</h4>
+        <p>Closed-loop cooling loses heat sink. Peak ~800°C at 10 days; slow heatup provides mitigation time. SAND2024-07779 §4.1</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="sc-desc-card">
+    <div class="card-hd" id="sc-desc-title">Scenario description</div>
+    <div id="sc-desc-body" style="font-size:12.5px;color:var(--text2);line-height:1.7"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">Accident parameters</div>
+    <div class="g2" style="gap:1.5rem">
+      <div>
+        <div class="field">
+          <div class="field-hd">Peak fuel temperature (°C)<span class="fv" id="v-aT">1200</span></div>
+          <input type="range" min="800" max="1800" step="25" value="1200" id="s-aT" oninput="calcAcc()">
+          <div class="field-note">AGR safety tests cover 1500–1800°C (Tables 14/15). Thermal SiC failure onset ~1400°C (AGR fit extrapolation). <a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">AGR Table 16</a></div>
+        </div>
+        <div class="field">
+          <div class="field-hd">Accident duration (h)<span class="fv" id="v-aDur">24</span></div>
+          <input type="range" min="1" max="240" step="1" value="24" id="s-aDur" oninput="calcAcc()">
+        </div>
+      </div>
+      <div>
+        <div class="field">
+          <div class="field-hd">Coolant condition</div>
+          <select id="s-cool" onchange="calcAcc()">
+            <option value="he">Helium (normal / D-LOFC)</option>
+            <option value="air">Air ingress (accident)</option>
+          </select>
+          <div class="field-note">Air ingress adds graphite oxidation pathway; metallic FP release multiplied by ~1.5–2.0×. <a class="src src-htgr" href="https://www.osti.gov/biblio/2432717" target="_blank">SAND2024-07779 §2.1</a></div>
+        </div>
+        <div class="field">
+          <div class="field-hd">HEPA filter status</div>
+          <select id="s-hepa" onchange="calcAcc()">
+            <option value="ok">Intact (99.9% aerosol capture, DF = 1000)</option>
+            <option value="fail">Failed / bypassed</option>
+          </select>
+          <div class="field-note">Mechanical failure at 1.5 psid differential (95% CL). <a class="src src-htgr" href="https://www.nrc.gov/reading-rm/doc-collections/nuregs/contract/cr2565/" target="_blank">NUREG/CR-2565</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert a-warn" id="acc-warn" style="display:none"><span>⚠</span><div id="acc-warn-text"></div></div>
+  <div class="alert a-danger" id="acc-danger" style="display:none"><span>⛔</span><div id="acc-danger-text"></div></div>
+
+  <div class="mgrid" id="acc-kpi"></div>
+
+  <div class="card">
+    <div class="card-hd">Accident source term — release fractions to environment</div>
+    <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr>
+          <th style="width:14%">Nuclide</th>
+          <th style="width:13%">Release fraction</th>
+          <th style="width:9%">Level</th>
+          <th style="width:11%">vs normal op.</th>
+          <th style="width:14%">Relative scale</th>
+          <th style="width:39%">Method · Source</th>
+        </tr></thead>
+        <tbody id="acc-tbody"></tbody>
+      </table>
+    </div>
+    <div class="fn">
+      † Accident release = failed-particle gap inventory + enhanced diffusion at accident T + AGR safety test rate-fit integral (conservative).
+      AGR safety test geometric means (Tables 14/15) anchored at 1600/1700/1800°C; interpolated via Arrhenius rate fits (§4.5) at intermediate temperatures.
+      With HEPA intact: aerosol-phase Cs, Sr, Ag, Eu multiplied by DF = 1000 (99.9% capture). Kr, Xe, I (gas) pass through HEPA.<br>
+      Sources: <a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">AGR Tables 14/15</a> ·
+      <a class="src src-htgr" href="https://www.osti.gov/biblio/2432717" target="_blank">SAND2024-07779</a> ·
+      <a class="src src-mst" href="https://www.osti.gov/biblio/993002" target="_blank">MST WP §4</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">Accident vs. normal operation (log scale)</div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px" id="acc-legend"></div>
+    <div class="chart-wrap" style="height:260px">
+      <canvas id="accChart" role="img" aria-label="Grouped bar chart comparing normal and accident release fractions on log scale">Accident release fractions compared with normal operation</canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Scenario Comparison ─── -->
+<div class="page" id="page-comparison">
+  <div class="ph">
+    <div class="ph-title">Multi-Scenario Comparison</div>
+    <div class="ph-desc">Side-by-side comparison of Cs-134 and Ag-110m release fractions across all scenarios. All values based on AGR measured data fits. HEPA intact throughout.</div>
+    <hr class="ph-divider">
+  </div>
+  <div class="card">
+    <div class="card-hd">Cs-134 release fraction — all scenarios</div>
+    <div class="chart-wrap" style="height:300px">
+      <canvas id="compCsChart" role="img" aria-label="Horizontal bar chart of Cs-134 release fractions across VHTR scenarios">Cs-134 release by scenario</canvas>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-hd">Ag-110m release fraction — all scenarios</div>
+    <div class="chart-wrap" style="height:300px">
+      <canvas id="compAgChart" role="img" aria-label="Horizontal bar chart of Ag-110m release fractions across VHTR scenarios">Ag-110m release by scenario</canvas>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-hd">Summary table</div>
+    <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr><th>Scenario</th><th>Peak T</th><th>SiC fail (95%CL)</th><th>Ag-110m</th><th>Cs-134</th><th>Sr-90</th><th>Kr/Xe</th><th>Source</th></tr></thead>
+        <tbody id="comp-tbody"></tbody>
+      </table>
+    </div>
+    <div class="fn">All values: fuel-pebble-to-coolant/building release fractions without HEPA filtering. Source: <a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">AGR Tables 14/15/16</a></div>
+  </div>
+</div>
+
+<!-- ─── Filter & Barrier System ─── -->
+<div class="page" id="page-filter">
+  <div class="ph">
+    <div class="ph-title">Filter &amp; Barrier System</div>
+    <div class="ph-desc">PBMR-400 nuclear island HVAC filtration parameters and failure criteria. Sources: <a class="src src-htgr" href="https://www.osti.gov/biblio/2432717" target="_blank">SAND2024-07779 §3.2.3</a>, <a class="src src-htgr" href="https://www.nrc.gov/reading-rm/doc-collections/nuregs/contract/cr2565/" target="_blank">NUREG/CR-2565</a>, <a class="src src-mst" href="https://www.osti.gov/biblio/993002" target="_blank">MST WP §4.3</a></div>
+    <hr class="ph-divider">
+  </div>
+  <div class="g2">
+    <div class="card">
+      <div class="card-hd">HEPA filter performance</div>
+      <table class="tbl" style="table-layout:auto">
+        <thead><tr><th>Parameter</th><th>Value</th><th>Source</th></tr></thead>
+        <tbody>
+          <tr><td>Nuclear-grade HEPA efficiency (&gt;0.3 µm)</td><td class="tbl-mono">99.9% (DF = 1000)</td><td><a class="src src-htgr" href="https://www.standards.doe.gov/standards-documents/1000/1169-bhdbk-2003" target="_blank">DOE-HDBK-1169</a></td></tr>
+          <tr><td>Pre-filter (roughing) efficiency</td><td class="tbl-mono">82.5% (80–85% typical)</td><td><a class="src src-cons">Conservative assumption</a></td></tr>
+          <tr><td>Mechanical failure pressure (95% CL)</td><td class="tbl-mono">1.5 psid (10.3 kPa)</td><td><a class="src src-htgr" href="https://www.nrc.gov/reading-rm/doc-collections/nuregs/contract/cr2565/" target="_blank">NUREG/CR-2565</a></td></tr>
+          <tr><td>Mean failure pressure (test range)</td><td class="tbl-mono">2.87 psid</td><td><a class="src src-htgr" href="https://www.nrc.gov/reading-rm/doc-collections/nuregs/contract/cr2565/" target="_blank">NUREG/CR-2565</a></td></tr>
+          <tr><td>Thermal failure onset (no failure)</td><td class="tbl-mono">&lt;400°C</td><td><a class="src src-htgr" href="https://www.standards.doe.gov/standards-documents/3000/3010-bhdbk-1994-chg1" target="_blank">DOE-HDBK-3010 §5.4.1</a></td></tr>
+          <tr><td>Failure time at 825°C</td><td class="tbl-mono">Tens of minutes</td><td><a class="src src-htgr" href="https://www.standards.doe.gov/standards-documents/3000/3010-bhdbk-1994-chg1" target="_blank">DOE-HDBK-3010</a></td></tr>
+          <tr><td>ARF at thermal failure</td><td class="tbl-mono">10⁻⁴</td><td><a class="src src-htgr" href="https://www.standards.doe.gov/standards-documents/3000/3010-bhdbk-1994-chg1" target="_blank">DOE-HDBK-3010</a></td></tr>
+          <tr><td>Activated carbon filter (elemental I) DF</td><td class="tbl-mono">100</td><td><a class="src src-htgr" href="https://www.osti.gov/biblio/2432717" target="_blank">SAND2024-07779 §3.2.3</a></td></tr>
+          <tr><td>Particles &lt;0.3 µm</td><td class="tbl-mono">Bypass HEPA (uncaptured)</td><td><a class="src src-htgr" href="https://www.standards.doe.gov/standards-documents/1000/1169-bhdbk-2003" target="_blank">DOE-HDBK-1169</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-hd">HEPA thermal failure model (SAND2024-07779 Table 3-3)</div>
+      <table class="tbl" style="table-layout:auto">
+        <thead><tr><th>Inlet temp (°C)</th><th>Time to failure (min)</th><th>Source</th></tr></thead>
+        <tbody>
+          <tr><td>&lt;150°C</td><td>No failure</td><td><a class="src src-htgr" href="https://www.standards.doe.gov/standards-documents/3000/3010-bhdbk-1994-chg1" target="_blank">DOE-HDBK-3010 §5.4.1</a></td></tr>
+          <tr><td>150°C</td><td>360</td><td><a class="src src-cons">Conservative assumption</a></td></tr>
+          <tr><td>200°C</td><td>120</td><td><a class="src src-cons">Conservative assumption</a></td></tr>
+          <tr><td>400°C</td><td>60</td><td><a class="src src-htgr" href="https://www.standards.doe.gov/standards-documents/3000/3010-bhdbk-1994-chg1" target="_blank">DOE-HDBK-3010 §5.4.1</a></td></tr>
+          <tr><td>500°C</td><td>45</td><td><a class="src src-htgr" href="https://www.standards.doe.gov/standards-documents/3000/3010-bhdbk-1994-chg1" target="_blank">DOE-HDBK-3010 §5.4.1</a></td></tr>
+          <tr><td>825°C</td><td>20</td><td><a class="src src-htgr" href="https://www.standards.doe.gov/standards-documents/3000/3010-bhdbk-1994-chg1" target="_blank">DOE-HDBK-3010 §5.4.1</a></td></tr>
+          <tr><td>850°C</td><td>1</td><td><a class="src src-cons">Conservative assumption</a></td></tr>
+        </tbody>
+      </table>
+      <div class="fn">Integral failure criterion: ∫ dt/τ(T) ≥ 1.0 triggers failure. Source: <a class="src src-htgr" href="https://www.osti.gov/biblio/2432717" target="_blank">SAND2024-07779 §3.2.3 Table 3-3</a></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">Spent fuel tank (SFT) cooling parameters</div>
+    <div class="g2">
+      <table class="tbl" style="table-layout:auto">
+        <thead><tr><th>Parameter</th><th>Value</th><th>Source</th></tr></thead>
+        <tbody>
+          <tr><td>Concrete cubicle volume</td><td class="tbl-mono">800 m³</td><td><a class="src src-htgr" href="https://www.nrc.gov/docs/ML0609/ML060940293.pdf" target="_blank">PBMR Ref 21, Table 3-2</a></td></tr>
+          <tr><td>Storage tank volume</td><td class="tbl-mono">70 m³</td><td><a class="src src-htgr" href="https://www.nrc.gov/docs/ML0609/ML060940293.pdf" target="_blank">PBMR Ref 21</a></td></tr>
+          <tr><td>Spent fuel fan ΔP</td><td class="tbl-mono">10 Pa</td><td><a class="src src-htgr" href="https://www.nrc.gov/docs/ML0609/ML060940293.pdf" target="_blank">PBMR Table 3-2</a></td></tr>
+          <tr><td>Used fuel fan ΔP (with filter)</td><td class="tbl-mono">2,000 Pa</td><td><a class="src src-htgr" href="https://www.nrc.gov/docs/ML0609/ML060940293.pdf" target="_blank">PBMR Table 3-2</a></td></tr>
+          <tr><td>Air-to-air HX capacity</td><td class="tbl-mono">~140 kW</td><td><a class="src src-htgr" href="https://doi.org/10.1016/j.nucengdes.2006.07.014" target="_blank">Fuls &amp; Mathews 2006</a></td></tr>
+          <tr><td>Spent fuel decay heat (full tank)</td><td class="tbl-mono">~120–124 kW</td><td><a class="src src-htgr" href="https://www.nrc.gov/docs/ML2305/ML23058A213.pdf" target="_blank">ORNL SCALE, ML23058A213</a></td></tr>
+          <tr><td>Used fuel decay heat (rated)</td><td class="tbl-mono">~640 kW</td><td><a class="src src-htgr" href="https://doi.org/10.1016/j.nucengdes.2006.07.014" target="_blank">Fuls &amp; Mathews 2006</a></td></tr>
+        </tbody>
+      </table>
+      <div>
+        <div class="card-hd" style="margin-top:0">FP transport pathway</div>
+        <div class="pathway">
+          <div class="pw-node"><div class="pw-box">UO₂ kernel<br>FP generation</div><div class="pw-lbl">source</div></div>
+          <span class="pw-arrow">→</span>
+          <div class="pw-node"><div class="pw-box">Buffer<br>gas accumulation</div><div class="pw-lbl">recoil sink</div></div>
+          <span class="pw-arrow">→</span>
+          <div class="pw-node"><div class="pw-box pw-box-key">SiC layer<br>Cs/Sr barrier</div><div class="pw-lbl">primary barrier</div></div>
+          <span class="pw-arrow">→</span>
+          <div class="pw-node"><div class="pw-box">Graphite matrix<br>sorption/diffusion</div><div class="pw-lbl">secondary</div></div>
+          <span class="pw-arrow">→</span>
+          <div class="pw-node"><div class="pw-box">He coolant<br>primary circuit</div><div class="pw-lbl">monitored</div></div>
+          <span class="pw-arrow">→</span>
+          <div class="pw-node"><div class="pw-box pw-box-mit">HEPA/C<br>filters</div><div class="pw-lbl">DF 1000</div></div>
+          <span class="pw-arrow">→</span>
+          <div class="pw-node"><div class="pw-box pw-box-end">Environment<br>release</div><div class="pw-lbl">source term</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── AGR Database ─── -->
+<div class="page" id="page-agr">
+  <div class="ph">
+    <div class="ph-title">AGR Experimental Database</div>
+    <div class="ph-desc">Source: <a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">INL/RPT-23-74651, Stempien, Cai, Demkowicz — Idaho National Laboratory, September 2023</a></div>
+    <hr class="ph-divider">
+  </div>
+
+  <div class="alert a-green">
+    <span>✓</span>
+    <div>This tool uses measured values directly from INL/RPT-23-74651: <b>Table 9</b> (M/C fractions, intact compacts) · <b>Tables 14/15</b> (safety test release fractions) · <b>Table 16</b> (SiC failure statistics, binomial 95% CL) · <b>Section 4.2</b> (in-pile Arrhenius rate fits) · <b>Section 4.5</b> (safety test rate fits).</div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">Table 16 — SiC and TRISO failure statistics (UCO fuel only)</div>
+    <table class="tbl" style="table-layout:auto">
+      <thead><tr><th>Dataset</th><th>Total particles</th><th>SiC failures</th><th>SiC fraction</th><th>SiC 95% CL</th><th>TRISO fraction</th><th>TRISO 95% CL</th></tr></thead>
+      <tbody>
+        <tr><td>AGR-1 irradiation</td><td class="tbl-mono">298,000</td><td class="tbl-mono">4</td><td class="tbl-mono">1.50×10⁻⁵</td><td class="tbl-mono">3.10×10⁻⁵</td><td class="tbl-mono">0</td><td class="tbl-mono">1.10×10⁻⁵</td></tr>
+        <tr><td>AGR-2 irradiation</td><td class="tbl-mono">114,336</td><td class="tbl-mono">≤6</td><td class="tbl-mono">5.25×10⁻⁵</td><td class="tbl-mono">1.04×10⁻⁴</td><td class="tbl-mono">≤3.50×10⁻⁵</td><td class="tbl-mono">8.01×10⁻⁵</td></tr>
+        <tr style="background:var(--green-bg)"><td><b>Combined irradiation (tool default)</b></td><td class="tbl-mono"><b>412,336</b></td><td class="tbl-mono"><b>10</b></td><td class="tbl-mono"><b>2.43×10⁻⁵</b></td><td class="tbl-mono hl-green"><b>4.11×10⁻⁵</b></td><td class="tbl-mono"><b>9.70×10⁻⁶</b></td><td class="tbl-mono"><b>2.22×10⁻⁵</b></td></tr>
+        <tr><td>Combined 1600°C safety tests</td><td class="tbl-mono">52,156</td><td class="tbl-mono">3</td><td class="tbl-mono">5.75×10⁻⁵</td><td class="tbl-mono hl-amber">1.49×10⁻⁴</td><td class="tbl-mono">1.92×10⁻⁵</td><td class="tbl-mono">9.10×10⁻⁵</td></tr>
+        <tr><td>Combined 1700°C safety tests</td><td class="tbl-mono">12,400</td><td class="tbl-mono">7</td><td class="tbl-mono">5.60×10⁻⁴</td><td class="tbl-mono hl-amber">1.10×10⁻³</td><td class="tbl-mono">0</td><td class="tbl-mono">2.50×10⁻⁴</td></tr>
+        <tr><td>Combined 1800°C safety tests</td><td class="tbl-mono">32,380</td><td class="tbl-mono">28</td><td class="tbl-mono">8.65×10⁻⁴</td><td class="tbl-mono hl-red">1.19×10⁻³</td><td class="tbl-mono">9.26×10⁻⁵</td><td class="tbl-mono">2.39×10⁻⁴</td></tr>
+      </tbody>
+    </table>
+    <div class="fn">UCO TRISO fuel only. Binomial statistics 95% confidence upper limit. Source: <a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">INL/RPT-23-74651 Table 16</a></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">AGR-1 safety test release fractions — selected results (Table 14)</div>
+    <div style="overflow-x:auto">
+      <table class="tbl" style="table-layout:auto;min-width:600px">
+        <thead><tr><th>Compact</th><th>Test T</th><th>Variant</th><th>Ag-110m</th><th>Cs-134</th><th>Sr-90</th><th>Eu-154</th><th>SiC failures</th></tr></thead>
+        <tbody>
+          <tr><td class="tbl-mono">3-2-2</td><td>1600°C</td><td>Baseline</td> <td class="tbl-mono">6.33×10⁻²</td><td class="tbl-mono">2.79×10⁻⁷</td><td class="tbl-mono">3.00×10⁻⁵</td><td class="tbl-mono">2.81×10⁻⁴</td><td class="tbl-mono">0</td></tr>
+          <tr><td class="tbl-mono">3-3-2</td><td>1600°C</td><td>Baseline</td> <td class="tbl-mono">1.01×10⁻¹</td><td class="tbl-mono">2.15×10⁻⁴</td><td class="tbl-mono">1.33×10⁻³</td><td class="tbl-mono">1.92×10⁻³</td><td class="tbl-mono">1</td></tr>
+          <tr><td class="tbl-mono">4-3-3</td><td>1600°C</td><td>Variant 3</td><td class="tbl-mono">3.40×10⁻¹</td><td class="tbl-mono">6.77×10⁻⁷</td><td class="tbl-mono">7.59×10⁻⁴</td><td class="tbl-mono">8.17×10⁻⁴</td><td class="tbl-mono">0</td></tr>
+          <tr><td class="tbl-mono">3-3-1</td><td>1700°C</td><td>Baseline</td> <td class="tbl-mono">5.12×10⁻²</td><td class="tbl-mono">3.59×10⁻⁴</td><td class="tbl-mono">1.33×10⁻³</td><td class="tbl-mono">2.33×10⁻³</td><td class="tbl-mono">4</td></tr>
+          <tr><td class="tbl-mono">4-4-3</td><td>1700°C</td><td>Variant 3</td><td class="tbl-mono">1.66×10⁻¹</td><td class="tbl-mono">7.29×10⁻⁷</td><td class="tbl-mono">9.67×10⁻⁴</td><td class="tbl-mono">2.90×10⁻³</td><td class="tbl-mono">0</td></tr>
+          <tr><td class="tbl-mono">3-2-3</td><td>1800°C</td><td>Baseline</td> <td class="tbl-mono">9.93×10⁻²</td><td class="tbl-mono">1.60×10⁻³</td><td class="tbl-mono">1.03×10⁻²</td><td class="tbl-mono">1.36×10⁻²</td><td class="tbl-mono">11</td></tr>
+          <tr><td class="tbl-mono">4-3-2</td><td>1800°C</td><td>Variant 3</td><td class="tbl-mono">1.40×10⁻¹</td><td class="tbl-mono">1.21×10⁻³</td><td class="tbl-mono">9.22×10⁻³</td><td class="tbl-mono">1.78×10⁻²</td><td class="tbl-mono">3</td></tr>
+          <tr><td class="tbl-mono">4-4-1</td><td>1800°C</td><td>Variant 3</td><td class="tbl-mono">2.34×10⁻¹</td><td class="tbl-mono">3.62×10⁻⁴</td><td class="tbl-mono">9.99×10⁻³</td><td class="tbl-mono">1.51×10⁻²</td><td class="tbl-mono">2</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="fn">Release fraction = fraction of compact EOI+1d inventory released during safety test. Source: <a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">INL/RPT-23-74651 Table 14</a></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">In-pile Arrhenius fit parameters — Section 4.2</div>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:.5rem">Model: R = A · exp(B · 10000/T<sub>K</sub>)  [release fraction / h / %FIMA]</p>
+    <table class="tbl" style="table-layout:auto">
+      <thead><tr><th>Nuclide</th><th>A</th><th>B</th><th>R² (fit quality)</th><th>Rate at 1100°C</th></tr></thead>
+      <tbody>
+        <tr><td>Ag-110m</td><td class="tbl-mono">2.16×10¹</td> <td class="tbl-mono">−2.27</td><td class="tbl-mono">0.433</td><td class="tbl-mono" id="agr-r-ag">—</td></tr>
+        <tr><td>Cs-134</td> <td class="tbl-mono">1.03×10⁻⁴</td><td class="tbl-mono">−1.83</td><td class="tbl-mono">0.691</td><td class="tbl-mono" id="agr-r-cs">—</td></tr>
+        <tr><td>Eu-154</td> <td class="tbl-mono">1.30×10⁴</td> <td class="tbl-mono">−4.03</td><td class="tbl-mono">0.439</td><td class="tbl-mono" id="agr-r-eu">—</td></tr>
+        <tr><td>Sr-90</td>  <td class="tbl-mono">8.26×10⁸</td> <td class="tbl-mono">−5.89</td><td class="tbl-mono">0.170</td><td class="tbl-mono" id="agr-r-sr">—</td></tr>
+      </tbody>
+    </table>
+    <div class="fn">Source: <a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">INL/RPT-23-74651 Section 4.2</a>. Low R² reflects inherent scatter in experimental data; this tool uses the fit as a central estimate.</div>
+  </div>
+</div>
+
+<!-- ─── IAEA Diffusivity ─── -->
+<div class="page" id="page-diffdata">
+  <div class="ph">
+    <div class="ph-title">IAEA TECDOC-978 Diffusivity Data</div>
+    <div class="ph-desc">Source: <a class="src src-iaea" href="https://www.iaea.org/publications/5456/fuel-performance-and-fission-product-behaviour-in-gas-cooled-reactors" target="_blank">IAEA TECDOC-978 (1997) Appendix A</a>, reproduced in <a class="src src-htgr" href="https://www.osti.gov/biblio/2432717" target="_blank">SAND2024-07779 Table 3-5</a>. D = D₀ · exp(−Q/RT)</div>
+    <hr class="ph-divider">
+  </div>
+  <div class="card">
+    <div class="card-hd">Arrhenius parameters by layer (D₀ in m²/s, Q in J/mol)</div>
+    <div style="overflow-x:auto">
+      <table class="tbl" style="min-width:680px;table-layout:auto">
+        <thead>
+          <tr><th rowspan="2">Layer</th><th colspan="2" style="text-align:center;border-left:1px solid var(--border)">Kr</th><th colspan="2" style="text-align:center;border-left:1px solid var(--border)">Cs</th><th colspan="2" style="text-align:center;border-left:1px solid var(--border)">Sr</th><th colspan="2" style="text-align:center;border-left:1px solid var(--border)">Ag</th></tr>
+          <tr><th style="border-left:1px solid var(--border)">D₀</th><th>Q (kJ)</th><th style="border-left:1px solid var(--border)">D₀</th><th>Q (kJ)</th><th style="border-left:1px solid var(--border)">D₀</th><th>Q (kJ)</th><th style="border-left:1px solid var(--border)">D₀</th><th>Q (kJ)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Fuel kernel</td><td class="tbl-mono">1.3×10⁻¹²</td><td class="tbl-mono">126</td><td class="tbl-mono">5.6×10⁻⁸</td><td class="tbl-mono">209</td><td class="tbl-mono">2.2×10⁻³</td><td class="tbl-mono">488</td><td class="tbl-mono">6.7×10⁻⁹</td><td class="tbl-mono">165</td></tr>
+          <tr><td>Buffer</td><td class="tbl-mono">1.0×10⁻⁸</td><td class="tbl-mono">0</td><td class="tbl-mono">1.0×10⁻⁸</td><td class="tbl-mono">0</td><td class="tbl-mono">1.0×10⁻⁸</td><td class="tbl-mono">0</td><td class="tbl-mono">1.0×10⁻⁸</td><td class="tbl-mono">0</td></tr>
+          <tr><td>PyC (inner / outer)</td><td class="tbl-mono">2.9×10⁻⁸</td><td class="tbl-mono">291</td><td class="tbl-mono">6.3×10⁻⁸</td><td class="tbl-mono">222</td><td class="tbl-mono">2.3×10⁻⁶</td><td class="tbl-mono">197</td><td class="tbl-mono">5.3×10⁻⁹</td><td class="tbl-mono">154</td></tr>
+          <tr style="background:var(--amber-bg)"><td><b>SiC (primary metallic barrier)</b></td><td class="tbl-mono">3.7×10¹</td><td class="tbl-mono">657</td><td class="tbl-mono">7.2×10⁻¹⁴</td><td class="tbl-mono">125</td><td class="tbl-mono">1.2×10⁻⁹</td><td class="tbl-mono">205</td><td class="tbl-mono hl-red">3.6×10⁻⁹</td><td class="tbl-mono hl-red">215</td></tr>
+          <tr><td>Graphite matrix</td><td class="tbl-mono">6.0×10⁻⁶</td><td class="tbl-mono">0</td><td class="tbl-mono">3.6×10⁻⁴</td><td class="tbl-mono">189</td><td class="tbl-mono">1.0×10⁻²</td><td class="tbl-mono">303</td><td class="tbl-mono">1.6</td><td class="tbl-mono">258</td></tr>
+          <tr><td>Structural carbon</td><td class="tbl-mono">6.0×10⁻⁶</td><td class="tbl-mono">0</td><td class="tbl-mono">1.7×10⁻⁶</td><td class="tbl-mono">149</td><td class="tbl-mono">1.7×10⁻²</td><td class="tbl-mono">268</td><td class="tbl-mono">1.6</td><td class="tbl-mono">258</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="fn">Ag in SiC: D₀ = 3.6×10⁻⁹ m²/s, Q = 215 kJ/mol — anomalously high, orders of magnitude above Cs. This explains Ag dominance of normal-operation release. Source: <a class="src src-iaea" href="https://www.iaea.org/publications/5456/fuel-performance-and-fission-product-behaviour-in-gas-cooled-reactors" target="_blank">IAEA TECDOC-978 App. A</a> / <a class="src src-htgr" href="https://www.osti.gov/biblio/2432717" target="_blank">SAND2024-07779 Table 3-5</a></div>
+  </div>
+  <div class="card">
+    <div class="card-hd">Effective diffusivity in SiC layer vs. temperature</div>
+    <table class="tbl" style="table-layout:auto">
+      <thead><tr><th>Temperature</th><th>D_Kr (m²/s)</th><th>D_Cs (m²/s)</th><th>D_Sr (m²/s)</th><th>D_Ag (m²/s)</th><th>D_Ag / D_Cs ratio</th></tr></thead>
+      <tbody id="diff-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ─── MST Methodology ─── -->
+<div class="page" id="page-mst">
+  <div class="ph">
+    <div class="ph-title">Mechanistic Source Term (MST) Methodology</div>
+    <div class="ph-desc">Source: <a class="src src-mst" href="https://www.osti.gov/biblio/993002" target="_blank">INL/EXT-10-17997 (July 2010) — NGNP Mechanistic Source Terms White Paper</a></div>
+    <hr class="ph-divider">
+  </div>
+  <div class="alert a-info">
+    <span>ℹ</span>
+    <div>The MST White Paper (INL/EXT-10-17997) establishes the NGNP/HTGR mechanistic source term framework: event-specific mechanistic models replace conservative bounding estimates, combining TRISO irradiation data and primary circuit transport analysis to support 10 CFR 52 COL licensing.</div>
+  </div>
+  <div class="g2">
+    <div class="card">
+      <div class="card-hd">Source term release pathways (MST WP §4)</div>
+      <table class="tbl" style="table-layout:auto">
+        <thead><tr><th>Pathway</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Normal operation: diffusion through intact TRISO → coolant → building → environment</td></tr>
+          <tr><td>2</td><td>Defect / failed particle gap inventory released directly to coolant</td></tr>
+          <tr><td>3</td><td>Accident: thermal TRISO failure → enhanced release (per AGR safety tests)</td></tr>
+          <tr><td>4</td><td>Uranium contamination in graphite matrix (~10⁻⁶) → continuous background</td></tr>
+          <tr><td>5</td><td>Coolant plate-out FP resuspension during D-LOFC depressurization</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-hd">Key MST parameters (§4 reference values)</div>
+      <table class="tbl" style="table-layout:auto">
+        <thead><tr><th>Parameter</th><th>Value</th><th>Source</th></tr></thead>
+        <tbody>
+          <tr><td>Kr/Xe gap fraction</td><td class="tbl-mono">~5×10⁻²</td><td><a class="src src-mst" href="https://www.osti.gov/biblio/993002" target="_blank">MST WP §4</a></td></tr>
+          <tr><td>Cs gap fraction</td>   <td class="tbl-mono">~1×10⁻²</td><td><a class="src src-mst" href="https://www.osti.gov/biblio/993002" target="_blank">MST WP §4</a></td></tr>
+          <tr><td>I gap fraction</td>    <td class="tbl-mono">~5×10⁻³</td><td><a class="src src-mst" href="https://www.osti.gov/biblio/993002" target="_blank">MST WP §4</a></td></tr>
+          <tr><td>Sr gap fraction</td>   <td class="tbl-mono">~2×10⁻³</td><td><a class="src src-cons">Conservative estimate</a></td></tr>
+          <tr><td>Confinement leak rate</td><td class="tbl-mono">0.1%/day @ +0.5 in-H₂O</td><td><a class="src src-mst" href="https://www.osti.gov/biblio/993002" target="_blank">MST WP §4.3</a></td></tr>
+          <tr><td>HTGR source term approach</td><td>Mechanistic (event-specific)</td><td><a class="src src-mst" href="https://www.osti.gov/biblio/993002" target="_blank">MST WP §4.1</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-hd">Licensing basis events (LBEs) — classification (MST WP §4.4)</div>
+    <table class="tbl" style="table-layout:auto">
+      <thead><tr><th>LBE category</th><th>Typical event</th><th>Frequency (/RY)</th><th>Source term strategy</th></tr></thead>
+      <tbody>
+        <tr><td>Anticipated operating occurrences (AOO)</td><td>Pressurized LOFC (P-LOFC)</td><td>&gt;10⁻²</td><td>Mechanistic; no significant TRISO failure</td></tr>
+        <tr><td>Design basis events (DBA)</td><td>Depressurized LOFC (D-LOFC)</td><td>10⁻⁴–10⁻²</td><td>AGR safety test data; TRISO thermal failure model</td></tr>
+        <tr><td>Beyond design basis (BDBA)</td><td>Air / water ingress</td><td>10⁻⁶–10⁻⁴</td><td>Mechanistic + chemical oxidation model</td></tr>
+        <tr><td>Residual risk events</td><td>Multiple failure combinations</td><td>&lt;10⁻⁶</td><td>Outside design basis</td></tr>
+      </tbody>
+    </table>
+    <div class="fn">Source: <a class="src src-mst" href="https://www.osti.gov/biblio/993002" target="_blank">INL/EXT-10-17997 §4.4, Table 4-1</a></div>
+  </div>
+</div>
+
+<!-- ─── References ─── -->
+<div class="page" id="page-refs">
+  <div class="ph">
+    <div class="ph-title">Reference Index</div>
+    <div class="ph-desc">Every numerical value in this tool is traceable to one of these primary sources. Click links to access each document directly.</div>
+    <hr class="ph-divider">
+  </div>
+  <div id="refs-list"></div>
+</div>
+
+<!-- ─── Value Traceability ─── -->
+<div class="page" id="page-trace">
+  <div class="ph">
+    <div class="ph-title">Value Traceability Table</div>
+    <div class="ph-desc">Every input default and computed parameter with its document, table/section, and data category.</div>
+    <hr class="ph-divider">
+  </div>
+  <div class="card">
+    <div style="overflow-x:auto">
+      <table class="tbl" style="table-layout:auto">
+        <thead><tr><th>Parameter / value</th><th>Value</th><th>Document</th><th>Location</th><th>Category</th></tr></thead>
+        <tbody>
+          <tr><td>AGR combined SiC 95% CL (irradiation)</td><td class="tbl-mono">4.11×10⁻⁵</td><td><a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">INL/RPT-23-74651</a></td><td>Table 16</td><td><span class="badge b-green">AGR measured</span></td></tr>
+          <tr><td>AGR Ag-110m M/C Arrhenius A</td><td class="tbl-mono">3.02×10⁷</td><td><a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">INL/RPT-23-74651</a></td><td>Table 9 fit</td><td><span class="badge b-green">AGR measured</span></td></tr>
+          <tr><td>AGR Cs-134 M/C Arrhenius A</td><td class="tbl-mono">1.78×10³</td><td><a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">INL/RPT-23-74651</a></td><td>Table 9 fit</td><td><span class="badge b-green">AGR measured</span></td></tr>
+          <tr><td>AGR Ag-110m in-pile rate A</td><td class="tbl-mono">2.16×10¹</td><td><a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">INL/RPT-23-74651</a></td><td>Section 4.2</td><td><span class="badge b-green">AGR measured</span></td></tr>
+          <tr><td>AGR Sr-90 in-pile rate A</td><td class="tbl-mono">8.26×10⁸</td><td><a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">INL/RPT-23-74651</a></td><td>Section 4.2</td><td><span class="badge b-green">AGR measured</span></td></tr>
+          <tr><td>1600°C safety test Ag-110m geometric mean</td><td class="tbl-mono">6.55×10⁻²</td><td><a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">INL/RPT-23-74651</a></td><td>Table 14 (computed)</td><td><span class="badge b-green">AGR measured</span></td></tr>
+          <tr><td>1800°C safety test Cs-134 geometric mean</td><td class="tbl-mono">9.52×10⁻⁴</td><td><a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">INL/RPT-23-74651</a></td><td>Table 14 (computed)</td><td><span class="badge b-green">AGR measured</span></td></tr>
+          <tr><td>Kr SiC diffusivity D₀</td><td class="tbl-mono">3.7×10¹ m²/s</td><td><a class="src src-iaea" href="https://www.iaea.org/publications/5456/fuel-performance-and-fission-product-behaviour-in-gas-cooled-reactors" target="_blank">IAEA TECDOC-978</a></td><td>App. A / SAND2024-07779 Table 3-5</td><td><span class="badge b-blue">IAEA</span></td></tr>
+          <tr><td>Cs SiC diffusivity D₀</td><td class="tbl-mono">7.2×10⁻¹⁴ m²/s</td><td><a class="src src-iaea" href="https://www.iaea.org/publications/5456/fuel-performance-and-fission-product-behaviour-in-gas-cooled-reactors" target="_blank">IAEA TECDOC-978</a></td><td>App. A / SAND2024-07779 Table 3-5</td><td><span class="badge b-blue">IAEA</span></td></tr>
+          <tr><td>Ag SiC diffusivity D₀</td><td class="tbl-mono">3.6×10⁻⁹ m²/s</td><td><a class="src src-iaea" href="https://www.iaea.org/publications/5456/fuel-performance-and-fission-product-behaviour-in-gas-cooled-reactors" target="_blank">IAEA TECDOC-978</a></td><td>App. A / SAND2024-07779 Table 3-5</td><td><span class="badge b-blue">IAEA</span></td></tr>
+          <tr><td>PBMR-400 thermal power</td><td class="tbl-mono">400 MW<sub>th</sub></td><td><a class="src src-htgr" href="https://www.nrc.gov/docs/ML0609/ML060940293.pdf" target="_blank">PBMR-400 Doc 016956</a></td><td>Table 3-1</td><td><span class="badge b-blue">Design spec</span></td></tr>
+          <tr><td>PBMR-400 core residence time</td><td class="tbl-mono">927.9 days</td><td><a class="src src-htgr" href="https://www.nrc.gov/docs/ML0609/ML060940293.pdf" target="_blank">PBMR-400 Doc 016956</a></td><td>Table 3-1</td><td><span class="badge b-blue">Design spec</span></td></tr>
+          <tr><td>HEPA mechanical failure pressure (95% CL)</td><td class="tbl-mono">1.5 psid</td><td><a class="src src-htgr" href="https://www.nrc.gov/reading-rm/doc-collections/nuregs/contract/cr2565/" target="_blank">NUREG/CR-2565</a></td><td>LA-9197-MS</td><td><span class="badge b-blue">Experimental</span></td></tr>
+          <tr><td>HEPA ARF at thermal failure</td><td class="tbl-mono">10⁻⁴</td><td><a class="src src-htgr" href="https://www.standards.doe.gov/standards-documents/3000/3010-bhdbk-1994-chg1" target="_blank">DOE-HDBK-3010-94</a></td><td>§5.4.1</td><td><span class="badge b-blue">Experimental</span></td></tr>
+          <tr><td>Kr/Xe gap fraction</td><td class="tbl-mono">5×10⁻²</td><td><a class="src src-mst" href="https://www.osti.gov/biblio/993002" target="_blank">MST INL/EXT-10-17997</a></td><td>§4 reference values</td><td><span class="badge b-amber">MST WP</span></td></tr>
+          <tr><td>Cs-134 safety test rate fit A (with SiC)</td><td class="tbl-mono">8.67×10⁵/h</td><td><a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">INL/RPT-23-74651</a></td><td>Section 4.5.1</td><td><span class="badge b-green">AGR measured</span></td></tr>
+          <tr><td>I diffusivity = Kr (approximation)</td><td class="tbl-mono">same as Kr</td><td><a class="src src-iaea" href="https://www.iaea.org/publications/5456/fuel-performance-and-fission-product-behaviour-in-gas-cooled-reactors" target="_blank">IAEA TECDOC-978</a></td><td>App. A recommendation</td><td><span class="badge b-amber">IAEA conservative assumption</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   DATA — INL/RPT-23-74651, IAEA TECDOC-978, SAND2024-07779, MST WP
+   ══════════════════════════════════════════════════════════════ */
+const R_GAS = 8.314;
+
+const NORM_MC = {
+  "Ag110m": {A:3.021e7, B:-2.887},
+  "Cs134":  {A:1.781e3, B:-2.661},
+};
+const INPILE = {
+  "Eu154":  {A:1.30e4,  B:-4.03},
+  "Sr90":   {A:8.26e8,  B:-5.89},
+  "Ag110m": {A:2.16e1,  B:-2.27},
+  "Cs134":  {A:1.03e-4, B:-1.83},
+};
+const ACC_RATE = {
+  "Cs134":  {A:8.67e5,  B:-5.71},
+  "Ag110m": {A:1.09e11, B:-7.03},
+  "Eu154":  {A:1.00e5,  B:-4.47},
+  "Sr90":   {A:1.47e5,  B:-4.77},
+};
+const AGR_ST = {
+  1600:{Ag:6.55e-2, Cs:9.53e-6, Sr:1.45e-4, Eu:8.74e-4},
+  1700:{Ag:7.05e-2, Cs:4.48e-5, Sr:1.47e-3, Eu:3.03e-3},
+  1800:{Ag:1.09e-1, Cs:9.52e-4, Sr:1.03e-2, Eu:1.51e-2},
+};
+const SIC_95CL = {base:4.11e-5, 1600:1.49e-4, 1700:1.10e-3, 1800:1.19e-3};
+const IAEA_D = {
+  Kr:{D0:3.7e1,   Q:657000},
+  Cs:{D0:7.2e-14, Q:125000},
+  Sr:{D0:1.2e-9,  Q:205000},
+  Ag:{D0:3.6e-9,  Q:215000},
+};
+const GAP_F = {Kr:5e-2, Cs:1e-2, I:5e-3, Sr:2e-3, Ag:1e-2, Eu:5e-4};
+const NUCS = [
+  {id:"Ag110m", label:"Ag-110m",  color:"#7c3aed", gaseous:false},
+  {id:"Cs134",  label:"Cs-134",   color:"#059669", gaseous:false},
+  {id:"Sr90",   label:"Sr-90",    color:"#2563b0", gaseous:false},
+  {id:"Eu154",  label:"Eu-154",   color:"#d97706", gaseous:false},
+  {id:"Kr",     label:"Kr / Xe",  color:"#64748b", gaseous:true},
+  {id:"I",      label:"I (iodine)",color:"#b91c1c", gaseous:true},
+];
+
+function arr(A,B,T_C){return A*Math.exp(B*10000/(T_C+273.15));}
+function D_SiC(nuc,T_C){const d=IAEA_D[nuc],TK=T_C+273.15;return d.D0*Math.exp(-d.Q/(R_GAS*TK));}
+function sphEta(D,t_s,r){const tau=r*r/(Math.PI**2*D);return Math.min(0.9999,1-(6/Math.PI**2)*Math.exp(-t_s/tau));}
+function sciStr(v){if(!v||v<=0)return'0';const e=Math.floor(Math.log10(Math.abs(v)));return`${(v/10**e).toFixed(2)}&thinsp;×&thinsp;10<sup>${e}</sup>`;}
+function sciPlain(v){if(!v||v<=0)return'0';const e=Math.floor(Math.log10(Math.abs(v)));return`${(v/10**e).toFixed(2)}e${e}`;}
+function logVal(v){return Math.max(-14,Math.log10(Math.max(v,1e-15)));}
+function barCol(f){if(f>0.05)return'#b91c1c';if(f>0.005)return'#b07a12';if(f>1e-5)return'#2563b0';return'#059669';}
+function sevBadge(f){
+  if(f>0.1)  return'<span class="badge b-red">Severe</span>';
+  if(f>0.01) return'<span class="badge b-amber">Moderate</span>';
+  if(f>1e-5) return'<span class="badge b-blue">Low</span>';
+  return'<span class="badge b-green">Negligible</span>';
+}
+
+/* ── Normal operation ── */
+function calcNormal_MC(id,T_C,t_d,bu,fd){
+  const t_h=t_d*24;
+  if(id==="Ag110m"||id==="Cs134"){
+    const f=NORM_MC[id],TK=T_C+273.15;
+    const mc_intact=f.A*Math.exp(f.B*10000/TK);
+    const mc_defect=GAP_F[id==="Cs134"?"Cs":"Ag"]*fd;
+    return Math.min(1,mc_intact+mc_defect);
+  }
+  if(id==="Eu154"||id==="Sr90"){const f=INPILE[id];return Math.min(1,arr(f.A,f.B,T_C)*t_h*bu);}
+  if(id==="Kr"){const D=D_SiC("Kr",T_C),eta=sphEta(D,t_d*86400,35e-6);return Math.min(1,fd*(eta*0.3+GAP_F.Kr));}
+  if(id==="I"){const D=D_SiC("Kr",T_C),eta=sphEta(D,t_d*86400,35e-6);return Math.min(1,fd*(eta*0.2+GAP_F.I));}
+  return 0;
+}
+
+let normChart=null,accChart=null,compCsChart=null,compAgChart=null;
+
+function calcNorm(){
+  const T=+document.getElementById('s-T').value;
+  const td=+document.getElementById('s-td').value;
+  const bu=+document.getElementById('s-bu').value;
+  const fd=+document.getElementById('s-fd').value*1e-5;
+  const pwr=+document.getElementById('s-pwr').value;
+  const np=+document.getElementById('s-np').value;
+  document.getElementById('v-T').textContent=T;
+  document.getElementById('v-td').textContent=td;
+  document.getElementById('v-bu').textContent=bu.toFixed(1);
+  document.getElementById('v-fd').textContent=(+document.getElementById('s-fd').value).toFixed(1);
+  document.getElementById('v-pwr').textContent=pwr;
+  document.getElementById('v-np').textContent=np.toLocaleString();
+
+  const results=NUCS.map(n=>({n,rf:calcNormal_MC(n.id,T,td,bu,fd)}));
+  const maxLog=Math.max(...results.map(r=>logVal(r.rf)));
+
+  const ag=results.find(r=>r.n.id==="Ag110m").rf;
+  const cs=results.find(r=>r.n.id==="Cs134").rf;
+  const kr=results.find(r=>r.n.id==="Kr").rf;
+  const pebbles=Math.round(450000*pwr/400);
+  document.getElementById('norm-kpi').innerHTML=`
+    <div class="metric mv-amber"><div class="metric-lbl">Ag-110m M/C fraction</div><div class="metric-val">${sciPlain(ag)}</div><div class="metric-sub">Highest normal-op release</div></div>
+    <div class="metric mv-green"><div class="metric-lbl">Cs-134 M/C fraction</div><div class="metric-val">${sciPlain(cs)}</div><div class="metric-sub">SiC barrier highly effective</div></div>
+    <div class="metric mv-blue"><div class="metric-lbl">Kr / Xe M/C fraction</div><div class="metric-val">${sciPlain(kr)}</div><div class="metric-sub">TRISO integrity controlled</div></div>
+    <div class="metric"><div class="metric-lbl">Estimated pebble count</div><div class="metric-val">${pebbles.toLocaleString()}</div><div class="metric-sub">scaled from PBMR-400</div></div>`;
+
+  document.getElementById('norm-tbody').innerHTML=results.map(({n,rf})=>{
+    const pct=Math.min(100,Math.max(0,(logVal(rf)-(-14))/(maxLog-(-14))*100));
+    const src=(n.id==="Kr"||n.id==="I")
+      ?`<a class="src src-iaea" href="https://www.iaea.org/publications/5456/fuel-performance-and-fission-product-behaviour-in-gas-cooled-reactors" target="_blank">IAEA TECDOC-978 App. A</a>`
+      :(n.id==="Eu154"||n.id==="Sr90")
+      ?`<a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">AGR §4.2 in-pile rate fit</a>`
+      :`<a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">AGR Table 9 Arrhenius fit</a>`;
+    const mech={
+      "Ag110m":"Anomalously high SiC diffusivity (D₀=3.6×10⁻⁹ m²/s) — dominant normal-op release species",
+      "Cs134": "SiC primary barrier (D₀=7.2×10⁻¹⁴ m²/s) — very low release under normal conditions",
+      "Sr90":  "AGR in-pile rate fit (R²=0.17; significant scatter in experimental data)",
+      "Eu154": "AGR in-pile rate fit (R²=0.44)",
+      "Kr":    "IAEA TECDOC-978 SiC diffusion + defect-particle gap release (MST WP f_gap = 5%)",
+      "I":     "Same diffusivity as Kr (IAEA TECDOC-978 recommendation); CsI compound formation",
+    }[n.id]||"";
+    return`<tr>
+      <td><b>${n.label}</b></td>
+      <td class="tbl-mono">${sciStr(rf)}</td>
+      <td>${sevBadge(rf)}</td>
+      <td><div class="bar-track"><div class="bar-fill" style="width:${Math.max(1,pct).toFixed(1)}%;background:${barCol(rf)}"></div></div></td>
+      <td style="font-size:11px;color:var(--text2)">${mech}<br>${src}</td></tr>`;
+  }).join('');
+
+  document.getElementById('norm-legend').innerHTML=results.map(r=>
+    `<span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text2)"><span style="width:9px;height:9px;border-radius:2px;background:${r.n.color};flex-shrink:0"></span>${r.n.label}</span>`
+  ).join('');
+
+  if(normChart)normChart.destroy();
+  normChart=new Chart(document.getElementById('normChart'),{
+    type:'bar',
+    data:{labels:results.map(r=>r.n.label),datasets:[{label:'log₁₀(M/C)',data:results.map(r=>logVal(r.rf)),backgroundColor:results.map(r=>r.n.color+'cc'),borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`M/C = ${sciPlain(results[c.dataIndex].rf)}`}}},scales:{x:{ticks:{color:'#64748b',font:{size:11}},grid:{color:'#e8ebef'}},y:{min:-14,max:0,grid:{color:'#e8ebef'},ticks:{color:'#64748b',font:{size:11},callback:v=>`10^${v}`},title:{display:true,text:'log₁₀(M/C fraction)',color:'#64748b',font:{size:11}}}}}
+  });
+}
+
+/* ── Accident ── */
+let curSc='dlofc';
+const SC_DESC={
+  dlofc:{title:'Depressurized LOFC (D-LOFC)',body:'Primary helium boundary breach combined with loss of forced circulation. After shutdown, decay heat is removed by passive conduction and radiation. PBMR-400 passive design prevents fuel temperatures exceeding TRISO failure threshold for full-power D-LOFC. This is the typical HTGR design-basis accident (DBA). Release fractions anchored to AGR safety test geometric means at 1600–1800°C.<br><b>Sources</b>: <a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">AGR Tables 14/15</a>; <a class="src src-htgr" href="https://www.osti.gov/biblio/2432717" target="_blank">SAND2024-07779 §4.1</a>; <a class="src src-mst" href="https://www.osti.gov/biblio/993002" target="_blank">MST WP §4.4</a>'},
+  air:{title:'Air ingress + graphite oxidation',body:'Air enters the primary circuit through a break. Oxygen reacts with graphite (pebbles + reflectors) producing CO/CO₂. Chemical attack degrades TRISO structural support; oxidation heat adds to thermal loading. Metallic FP release multiplied by ~1.5–2.0× relative to helium case. MELCOR models the Achenbach graphite oxidation correlation.<br><b>Sources</b>: <a class="src src-htgr" href="https://www.osti.gov/biblio/2432717" target="_blank">SAND2024-07779 §2.1 (MELCOR air oxidation model)</a>; <a class="src src-mst" href="https://www.osti.gov/biblio/993002" target="_blank">MST WP §4.4</a>'},
+  sft_lop:{title:'Spent fuel tank — loss of power',body:'Station blackout disables active cooling fans. Louvers automatically open for passive natural-convection cooling. Spent fuel decay heat ~120 kW is generally coolable passively. Used fuel with cubicle filter resistance may lead to heatup to ~700°C at 10 days. Key result from SAND2024-07779: loss of power <em>without</em> cubicle filtration maintains cooling; <em>with</em> filtration, heatup occurs.<br><b>Sources</b>: <a class="src src-htgr" href="https://www.osti.gov/biblio/2432717" target="_blank">SAND2024-07779 §4.1.1, Figs 4-4 and 4-7</a>; <a class="src src-htgr" href="https://www.nrc.gov/docs/ML2305/ML23058A213.pdf" target="_blank">ORNL SCALE ML23058A213</a>'},
+  sft_hx:{title:'Spent fuel tank — heat exchanger failure',body:'Closed-loop cooling fan continues operating but the air-to-air heat exchanger fails (no heat sink). Heat accumulates; peak fuel temperature reaches approximately 800°C at 10 days — well below the TRISO SiC thermal failure threshold (~1400°C). The slow heatup provides substantial time for operator action.<br><b>Sources</b>: <a class="src src-htgr" href="https://www.osti.gov/biblio/2432717" target="_blank">SAND2024-07779 §4.1.2, Figs 4-12 and 4-14</a>'},
+};
+
+function selSc(sc){
+  curSc=sc;
+  document.querySelectorAll('.sc-card').forEach(el=>el.classList.remove('sel'));
+  document.getElementById('sc-'+sc).classList.add('sel');
+  document.getElementById('sc-desc-title').textContent=SC_DESC[sc].title;
+  document.getElementById('sc-desc-body').innerHTML=SC_DESC[sc].body;
+  calcAcc();
+}
+
+function calcAccRF(id,T_C,t_h,sc,coolant){
+  function interpST(key){
+    if(T_C<=1500){
+      const f=ACC_RATE[id==="Eu154"?"Eu154":id];
+      if(!f)return 0;
+      return Math.min(0.999,arr(f.A,f.B,T_C)*t_h);
+    }
+    if(T_C<=1600)return AGR_ST[1600][key]||1e-9;
+    if(T_C<=1700){const lo=AGR_ST[1600][key]||1e-9,hi=AGR_ST[1700][key]||lo;return lo+(hi-lo)*(T_C-1600)/100;}
+    if(T_C<=1800){const lo=AGR_ST[1700][key]||1e-9,hi=AGR_ST[1800][key]||lo;return lo+(hi-lo)*(T_C-1700)/100;}
+    return Math.min(0.999,(AGR_ST[1800][key]||1e-3)*Math.pow(T_C/1800,3));
+  }
+  const sic_f=getSiCFail(T_C),gap_f=GAP_F[{Ag110m:"Ag",Cs134:"Cs",Sr90:"Sr",Eu154:"Eu",Kr:"Kr",I:"I"}[id]]||1e-3;
+  let rf=0;
+  if(id==="Ag110m")rf=interpST("Ag");
+  else if(id==="Cs134")rf=interpST("Cs");
+  else if(id==="Sr90")rf=interpST("Sr");
+  else if(id==="Eu154")rf=interpST("Eu");
+  else if(id==="Kr"){const D=D_SiC("Kr",T_C);rf=sic_f*GAP_F.Kr+(1-sic_f)*sphEta(D,t_h*3600,35e-6)*0.01;}
+  else if(id==="I"){const D=D_SiC("Kr",T_C);rf=sic_f*GAP_F.I+(1-sic_f)*sphEta(D,t_h*3600,35e-6)*0.005;}
+  rf=Math.max(rf,sic_f*gap_f);
+  if(coolant==="air"&&!["Kr","I"].includes(id))rf=Math.min(1,rf*1.7);
+  rf*={dlofc:1.0,air:1.0,sft_lop:0.15,sft_hx:0.12}[sc]||1.0;
+  return Math.min(0.999,rf);
+}
+
+function getSiCFail(T_C){
+  if(T_C<=1400)return SIC_95CL.base;
+  if(T_C<=1600)return SIC_95CL.base+(SIC_95CL[1600]-SIC_95CL.base)*(T_C-1400)/200;
+  if(T_C<=1700)return SIC_95CL[1600]+(SIC_95CL[1700]-SIC_95CL[1600])*(T_C-1600)/100;
+  if(T_C<=1800)return SIC_95CL[1700]+(SIC_95CL[1800]-SIC_95CL[1700])*(T_C-1700)/100;
+  return Math.min(0.15,SIC_95CL[1800]*Math.pow(T_C/1800,2));
+}
+
+function calcAcc(){
+  const T=+document.getElementById('s-aT').value;
+  const dur=+document.getElementById('s-aDur').value;
+  const cool=document.getElementById('s-cool').value;
+  const hepa=document.getElementById('s-hepa').value;
+  document.getElementById('v-aT').textContent=T;
+  document.getElementById('v-aDur').textContent=dur;
+
+  const sic_f=getSiCFail(T),triso_f=Math.min(1,sic_f*1.5);
+  const warn=document.getElementById('acc-warn'),dang=document.getElementById('acc-danger');
+  warn.style.display='none';dang.style.display='none';
+  if(T>=1800){dang.style.display='flex';document.getElementById('acc-danger-text').textContent=`Temperature ${T}°C exceeds AGR safety test upper bound (1800°C). Values are extrapolated with high uncertainty. SiC 95% CL failure fraction ≈ ${sciPlain(sic_f)}.`;}
+  else if(T>=1600){warn.style.display='flex';document.getElementById('acc-warn-text').textContent=`Temperature ${T}°C is within the AGR safety test range (1600–1800°C). SiC 95% CL failure fraction ≈ ${sciPlain(sic_f)} (AGR Table 16).`;}
+  else if(T>=1400){warn.style.display='flex';document.getElementById('acc-warn-text').textContent=`Temperature ${T}°C exceeds the PBMR-400 normal limit (1130°C) but is below the AGR safety test range. Values extrapolated via rate fits (INL/RPT-23-74651 §4.5).`;}
+
+  const norm_vals={};NUCS.forEach(n=>{norm_vals[n.id]=calcNormal_MC(n.id,1130,928,9.5,4.11e-5);});
+  const results=NUCS.map(n=>{
+    let rf=calcAccRF(n.id,T,dur,curSc,cool);
+    if(hepa==="ok"&&!n.gaseous)rf*=1e-3;
+    return{n,rf,norm:norm_vals[n.id]};
+  });
+
+  const sfc_src=`<a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">AGR Table 16</a>`;
+  document.getElementById('acc-kpi').innerHTML=`
+    <div class="metric ${sic_f>1e-3?'mv-red':sic_f>1e-4?'mv-amber':'mv-green'}"><div class="metric-lbl">SiC failure fraction (95% CL)</div><div class="metric-val">${sciPlain(sic_f)}</div><div class="metric-sub">${sfc_src}</div></div>
+    <div class="metric ${triso_f>1e-3?'mv-red':'mv-amber'}"><div class="metric-lbl">Overall TRISO failure</div><div class="metric-val">${sciPlain(triso_f)}</div><div class="metric-sub">SiC × 1.5 conservative</div></div>
+    <div class="metric mv-amber"><div class="metric-lbl">Ag-110m release fraction</div><div class="metric-val">${sciPlain(results.find(r=>r.n.id==="Ag110m").rf)}</div><div class="metric-sub">${hepa==="ok"?"post-HEPA":"raw release"}</div></div>
+    <div class="metric mv-blue"><div class="metric-lbl">Cs-134 release fraction</div><div class="metric-val">${sciPlain(results.find(r=>r.n.id==="Cs134").rf)}</div><div class="metric-sub">${hepa==="ok"?"post-HEPA":"raw release"}</div></div>`;
+
+  const maxLog=Math.max(...results.map(r=>logVal(r.rf)));
+  document.getElementById('acc-tbody').innerHTML=results.map(({n,rf,norm})=>{
+    const pct=Math.min(100,Math.max(0,(logVal(rf)-(-14))/(maxLog-(-14))*100));
+    const mult=rf/Math.max(norm,1e-15);
+    const multStr=mult>1000?`×${Math.round(mult).toLocaleString()}`:mult>1?`×${mult.toFixed(0)}`:'<×1';
+    const mech={
+      "Ag110m":"AGR Tables 14/15 safety test geometric mean (interpolated) + gap inventory contribution",
+      "Cs134": "AGR Tables 14/15 geometric mean (interpolated) + Arrhenius rate fit §4.5.1",
+      "Sr90":  "AGR Tables 14/15 geometric mean (interpolated)",
+      "Eu154": "AGR Tables 14/15 geometric mean (interpolated)",
+      "Kr":    "IAEA TECDOC-978 SiC diffusion + SiC failure gap release (MST WP)",
+      "I":     "Same as Kr (IAEA recommendation); CsI compound formation at lower temperatures",
+    }[n.id]||"";
+    return`<tr>
+      <td><b>${n.label}</b></td>
+      <td class="tbl-mono">${sciStr(rf)}</td>
+      <td>${sevBadge(rf)}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:${mult>100?'var(--red)':mult>10?'var(--amber)':'var(--text3)'}">${multStr}</td>
+      <td><div class="bar-track"><div class="bar-fill" style="width:${Math.max(1,pct).toFixed(1)}%;background:${barCol(rf)}"></div></div></td>
+      <td style="font-size:11px;color:var(--text2)">${mech}</td></tr>`;
+  }).join('');
+
+  document.getElementById('acc-legend').innerHTML=
+    `<span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)"><span style="width:9px;height:9px;border-radius:2px;background:var(--c3);border:1px solid var(--border2)"></span>Normal operation</span>`+
+    `<span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)"><span style="width:9px;height:9px;border-radius:2px;background:#d97706"></span>Accident scenario</span>`;
+  if(accChart)accChart.destroy();
+  accChart=new Chart(document.getElementById('accChart'),{
+    type:'bar',
+    data:{labels:results.map(r=>r.n.label),datasets:[
+      {label:'Normal operation',data:results.map(r=>logVal(r.norm)),backgroundColor:'#cbd5e1',borderWidth:0},
+      {label:'Accident',data:results.map(r=>logVal(r.rf)),backgroundColor:results.map(r=>r.n.color+'cc'),borderWidth:0}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${sciPlain(c.datasetIndex===0?results[c.dataIndex].norm:results[c.dataIndex].rf)}`}}},scales:{x:{ticks:{color:'#64748b',font:{size:11}},grid:{color:'#e8ebef'}},y:{min:-14,max:0,grid:{color:'#e8ebef'},ticks:{color:'#64748b',font:{size:11},callback:v=>`10^${v}`},title:{display:true,text:'log₁₀(release fraction)',color:'#64748b',font:{size:11}}}}}
+  });
+}
+
+/* ── Comparison ── */
+function buildComparison(){
+  const SCENARIOS=[
+    {lbl:'Normal op. (1130°C)',T:1130,dur:22272,sc:'dlofc',cool:'he',hepa:'ok',isNorm:true},
+    {lbl:'D-LOFC 1200°C',T:1200,dur:24,sc:'dlofc',cool:'he',hepa:'ok'},
+    {lbl:'D-LOFC 1600°C',T:1600,dur:48,sc:'dlofc',cool:'he',hepa:'ok'},
+    {lbl:'D-LOFC 1800°C',T:1800,dur:72,sc:'dlofc',cool:'he',hepa:'ok'},
+    {lbl:'Air ingress 1400°C',T:1400,dur:48,sc:'air',cool:'air',hepa:'fail'},
+    {lbl:'SFT loss of power 700°C',T:700,dur:240,sc:'sft_lop',cool:'he',hepa:'ok'},
+    {lbl:'SFT HX failure 800°C',T:800,dur:240,sc:'sft_hx',cool:'he',hepa:'ok'},
+  ];
+  const cs_vals=[],ag_vals=[];
+  let tbody='';
+  SCENARIOS.forEach(sc=>{
+    let cs,ag,sr,kr,sic;
+    if(sc.isNorm){
+      cs=calcNormal_MC("Cs134",1130,928,9.5,4.11e-5);ag=calcNormal_MC("Ag110m",1130,928,9.5,4.11e-5);
+      sr=calcNormal_MC("Sr90",1130,928,9.5,4.11e-5);kr=calcNormal_MC("Kr",1130,928,9.5,4.11e-5);
+      sic=SIC_95CL.base;
+    } else {
+      cs=calcAccRF("Cs134",sc.T,sc.dur,sc.sc,sc.cool);ag=calcAccRF("Ag110m",sc.T,sc.dur,sc.sc,sc.cool);
+      sr=calcAccRF("Sr90",sc.T,sc.dur,sc.sc,sc.cool);kr=calcAccRF("Kr",sc.T,sc.dur,sc.sc,sc.cool);
+      sic=getSiCFail(sc.T);
+      if(sc.hepa==="ok"){cs*=1e-3;ag*=1e-3;sr*=1e-3;}
+    }
+    cs_vals.push(logVal(cs));ag_vals.push(logVal(ag));
+    tbody+=`<tr><td>${sc.lbl}</td><td class="tbl-mono">${sc.T}°C</td>
+      <td class="tbl-mono">${sciStr(sic)}</td><td class="tbl-mono">${sciStr(ag)}</td>
+      <td class="tbl-mono">${sciStr(cs)}</td><td class="tbl-mono">${sciStr(sr)}</td>
+      <td class="tbl-mono">${sciStr(kr)}</td>
+      <td><a class="src src-agr" href="https://www.osti.gov/biblio/2331283" target="_blank">AGR Tables 14–16</a></td></tr>`;
+  });
+  document.getElementById('comp-tbody').innerHTML=tbody;
+  const labels=SCENARIOS.map(s=>s.lbl);
+  const bgs_cs=SCENARIOS.map((_,i)=>i===0?'#cbd5e1':'#059669cc');
+  const bgs_ag=SCENARIOS.map((_,i)=>i===0?'#cbd5e1':'#7c3aedcc');
+  if(compCsChart)compCsChart.destroy();
+  compCsChart=new Chart(document.getElementById('compCsChart'),{type:'bar',data:{labels,datasets:[{label:'Cs-134',data:cs_vals,backgroundColor:bgs_cs,borderWidth:0}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`Cs-134: 10^${c.raw.toFixed(2)}`}}},scales:{x:{min:-14,max:0,grid:{color:'#e8ebef'},ticks:{color:'#64748b',font:{size:11},callback:v=>`10^${v}`},title:{display:true,text:'log₁₀(Cs-134 release fraction)',color:'#64748b',font:{size:11}}},y:{ticks:{color:'#4a5568',font:{size:11}},grid:{display:false}}}}});
+  if(compAgChart)compAgChart.destroy();
+  compAgChart=new Chart(document.getElementById('compAgChart'),{type:'bar',data:{labels,datasets:[{label:'Ag-110m',data:ag_vals,backgroundColor:bgs_ag,borderWidth:0}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`Ag-110m: 10^${c.raw.toFixed(2)}`}}},scales:{x:{min:-14,max:0,grid:{color:'#e8ebef'},ticks:{color:'#64748b',font:{size:11},callback:v=>`10^${v}`},title:{display:true,text:'log₁₀(Ag-110m release fraction)',color:'#64748b',font:{size:11}}},y:{ticks:{color:'#4a5568',font:{size:11}},grid:{display:false}}}}});
+}
+
+/* ── Diffusivity table ── */
+function buildDiffTable(){
+  const temps=[800,900,1000,1100,1130,1300,1600,1800];
+  document.getElementById('diff-tbody').innerHTML=temps.map(T=>{
+    const kr=D_SiC("Kr",T),cs=D_SiC("Cs",T),sr=D_SiC("Sr",T),ag=D_SiC("Ag",T),ratio=ag/cs;
+    const hi=T>=1400?`style="background:var(--amber-bg)"`:'';
+    return`<tr ${hi}><td>${T}°C</td>
+      <td class="tbl-mono">${sciStr(kr)}</td><td class="tbl-mono">${sciStr(cs)}</td>
+      <td class="tbl-mono">${sciStr(sr)}</td>
+      <td class="tbl-mono" style="color:var(--red)">${sciStr(ag)}</td>
+      <td class="tbl-mono" style="color:var(--amber)">${sciStr(ratio)}</td></tr>`;
+  }).join('');
+}
+
+/* ── AGR rate table ── */
+function buildAGRRates(){
+  const T=1100;
+  ['ag','cs','eu','sr'].forEach(k=>{
+    const nuc={ag:"Ag110m",cs:"Cs134",eu:"Eu154",sr:"Sr90"}[k];
+    document.getElementById(`agr-r-${k}`).textContent=arr(INPILE[nuc].A,INPILE[nuc].B,T).toExponential(2)+' /h/%FIMA';
+  });
+}
+
+/* ── References ── */
+const REFS=[
+  {num:1,authors:"Stempien, Cai, Demkowicz",title:"AGR TRISO Fuel Fission Product Release Data",report:"INL/RPT-23-74651",year:"September 2023",org:"Idaho National Laboratory",
+   links:[{label:"OSTI",cls:"rl-osti",url:"https://www.osti.gov/biblio/2331283"}],access:"Open access"},
+  {num:2,authors:"Idaho National Laboratory",title:"Mechanistic Source Terms White Paper — NGNP Project",report:"INL/EXT-10-17997",year:"July 2010",org:"INL / DOE",
+   links:[{label:"OSTI",cls:"rl-osti",url:"https://www.osti.gov/biblio/993002"}],access:"Open access"},
+  {num:3,authors:"IAEA",title:"Fuel Performance and Fission Product Behaviour in Gas Cooled Reactors",report:"IAEA TECDOC-978",year:"November 1997",org:"International Atomic Energy Agency",
+   links:[{label:"IAEA",cls:"rl-iaea",url:"https://www.iaea.org/publications/5456/fuel-performance-and-fission-product-behaviour-in-gas-cooled-reactors"}],access:"Open access"},
+  {num:4,authors:"Albright, Wagner, Beeny",title:"MELCOR Accident Progression and Source Term Demonstration Calculations for an HTGR Fuel Cycle",report:"SAND2024-07779 Rev 3",year:"September 2024",org:"Sandia National Laboratories",
+   links:[{label:"OSTI",cls:"rl-osti",url:"https://www.osti.gov/biblio/2432717"}],access:"Open access"},
+  {num:5,authors:"Schilthelm, McIntyre, Sloan",title:"Uranium Oxycarbide (UCO) TRISO Coated Particle Fuel Performance",report:"EPRI-AR-1(NP)",year:"May 2019",org:"Electric Power Research Institute",
+   links:[{label:"EPRI abstract",cls:"rl-epri",url:"https://www.epri.com/research/products/000000003002015305"},{label:"Full doc: EPRI membership required",cls:"rl-lock",url:"#"}],access:"Abstract open; full report requires EPRI membership"},
+  {num:6,authors:"Humphries et al.",title:"MELCOR Computer Code Manuals Vol. 1, Version 2024.0",report:"SAND2024-02104",year:"March 2024",org:"Sandia National Laboratories",
+   links:[{label:"OSTI",cls:"rl-osti",url:"https://www.osti.gov/biblio/2341480"}],access:"Open access"},
+  {num:7,authors:"PBMR (Pty) Ltd",title:"Technical Description of the PBMR Demonstration Power Plant",report:"Doc 016956 Rev 4",year:"February 2006",org:"NRC ADAMS ML060940293",
+   links:[{label:"NRC ADAMS (direct PDF)",cls:"rl-nrc",url:"https://www.nrc.gov/docs/ML0609/ML060940293.pdf"}],access:"NRC ADAMS public"},
+  {num:8,authors:"Fuls, Mathews",title:"Passive Cooling of the PBMR Spent and Used Fuel Tanks",report:"Nucl. Eng. Design 237 (2006) 1354–1362",year:"2006",org:"University of Pretoria",
+   links:[{label:"DOI",cls:"rl-doi",url:"https://doi.org/10.1016/j.nucengdes.2006.07.014"}],access:"Journal subscription"},
+  {num:9,authors:"Horak et al.",title:"Structural Performance of HEPA Filters Under Simulated Tornado Conditions",report:"NUREG/CR-2565, LA-9197-MS",year:"February 1982",org:"Los Alamos National Laboratory / NRC",
+   links:[{label:"NRC",cls:"rl-nrc",url:"https://www.nrc.gov/reading-rm/doc-collections/nuregs/contract/cr2565/"}],access:"NRC public"},
+  {num:10,authors:"U.S. DOE",title:"Airborne Release Fractions/Rates for Nonreactor Nuclear Facilities, Vol. I",report:"DOE-HDBK-3010-94",year:"December 1994",org:"U.S. Department of Energy",
+   links:[{label:"DOE Standards",cls:"rl-doe",url:"https://www.standards.doe.gov/standards-documents/3000/3010-bhdbk-1994-chg1"}],access:"Open access"},
+  {num:11,authors:"U.S. DOE",title:"DOE Nuclear Air Cleaning Handbook",report:"DOE-HDBK-1169-2003",year:"2003",org:"U.S. Department of Energy",
+   links:[{label:"DOE Standards",cls:"rl-doe",url:"https://www.standards.doe.gov/standards-documents/1000/1169-bhdbk-2003"}],access:"Open access"},
+  {num:12,authors:"ORNL / NRC",title:"SCALE/MELCOR Non-LWR Source Term Workshop — HTGR",report:"NRC ADAMS ML23058A213",year:"February 2023",org:"Oak Ridge National Laboratory",
+   links:[{label:"NRC ADAMS (direct PDF)",cls:"rl-nrc",url:"https://www.nrc.gov/docs/ML2305/ML23058A213.pdf"}],access:"NRC ADAMS public"},
+  {num:13,authors:"Miller, Petti, Maki et al.",title:"PARFUME Theory and Model Basis Report",report:"INL/EXT-18-14497",year:"September 2018",org:"Idaho National Laboratory",
+   links:[{label:"OSTI",cls:"rl-osti",url:"https://www.osti.gov/biblio/1474440"}],access:"Open access"},
+];
+
+function buildRefs(){
+  document.getElementById('refs-list').innerHTML=REFS.map(r=>`
+    <div class="ref-item">
+      <div class="ref-num">[${r.num}]</div>
+      <div class="ref-body">
+        <span>${r.authors} (${r.year}). </span>
+        <span class="ref-title">${r.title}</span>
+        <span style="color:var(--text3)">. ${r.report}. ${r.org}.</span>
+        <div class="ref-links">${r.links.map(l=>`<a class="ref-link ${l.cls}" href="${l.url}" target="_blank">${l.label} ↗</a>`).join('')}</div>
+        <div class="ref-access">Access: ${r.access}</div>
+      </div>
+    </div>`).join('');
+}
+
+/* ── Navigation ── */
+function nav(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.sb-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.getElementById('n-'+page).classList.add('active');
+  if(page==='comparison')buildComparison();
+}
+
+/* ── Init ── */
+selSc('dlofc');
+calcNorm();
+calcAcc();
+buildDiffTable();
+buildAGRRates();
+buildRefs();
+</script>
+</body>
+</html>
